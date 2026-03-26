@@ -435,7 +435,7 @@ const DEFAULT_DATA = {
   }
 };
 
-let currentData = JSON.parse(localStorage.getItem('sc_data') || JSON.stringify(DEFAULT_DATA));
+let currentData = {};
 let expenses = JSON.parse(localStorage.getItem('sc_expenses') || JSON.stringify(DEFAULT_EXPENSES));
 let currentRange = '30d';
 let trendChart = null;
