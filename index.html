@@ -347,7 +347,7 @@
       <button class="btn btn-ghost" onclick="closeModal('config-modal')">✕</button>
     </div>
     <div class="config-field">
-      <div class="config-label">n8n webhook URL (dashboard listens here for sync pushes)</div>
+      <div class="config-label">n8n webhook URL (dashboard calls this to pull fresh data)</div>
       <input class="config-input" id="cfg-webhook" placeholder="https://your-n8n.com/webhook/dashboard-sync">
     </div>
     <div class="config-field">
@@ -692,22 +692,28 @@ async function manualRefresh() {
   icon.textContent = '↻';
 
   try {
-    // Try n8n webhook if configured
-    const webhook = localStorage.getItem('sc_cfg_webhook');
-    if (webhook) {
-      const res = await fetch(webhook, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'pull', range: currentRange }) });
-      if (res.ok) {
-        const fresh = await res.json();
-        if (fresh && fresh.dialed !== undefined) {
-          currentData = fresh;
-          localStorage.setItem('sc_data', JSON.stringify(currentData));
-        }
+    const binId = '69c4a148b7ec241ddca401e3';
+    const res = await fetch('https://api.jsonbin.io/v3/b/' + binId + '/latest', {
+      headers: { 'X-Access-Key': '$2a$10$TYxmZCnfLLUNCanta38yt.UOaSiulBEoL4t968g6RRPWHVMOUwInW' }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const fresh = data.record;
+      if (fresh && (fresh.dialed !== undefined || fresh.syncedAt)) {
+        currentData = { ...DEFAULT_DATA, ...fresh };
+        localStorage.setItem('sc_data', JSON.stringify(currentData));
+        syncStatus('live');
+      } else {
+        syncStatus('stale');
       }
+    } else {
+      console.warn('JSONBin fetch failed:', res.status);
+      syncStatus('stale');
     }
-    // Accept pushed data via URL hash (n8n can redirect with data)
-    syncStatus('live');
   } catch(e) {
-    console.warn('Refresh failed, using cached data', e);
+    console.warn('Refresh failed:', e.message);
+    syncStatus('stale');
   }
 
   render();
