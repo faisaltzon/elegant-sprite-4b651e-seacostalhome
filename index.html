@@ -701,9 +701,10 @@ async function manualRefresh() {
       const data = await res.json();
       const fresh = data.record;
       if (fresh && (fresh.dialed !== undefined || fresh.syncedAt)) {
-        currentData = { ...DEFAULT_DATA, ...fresh };
+        currentData = fresh;
         localStorage.setItem('sc_data', JSON.stringify(currentData));
         syncStatus('live');
+        console.log("Loaded real data from JSONBin:", currentData.dialed, "calls");
       } else {
         syncStatus('stale');
       }
