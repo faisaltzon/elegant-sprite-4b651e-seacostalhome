@@ -692,10 +692,8 @@ async function manualRefresh() {
   icon.textContent = '↻';
 
   try {
-    const binId = '69c4a148b7ec241ddca401e3';
-    const res = await fetch('https://api.jsonbin.io/v3/b/' + binId + '/latest', {
-      headers: { 'X-Access-Key': '$2a$10$TYxmZCnfLLUNCanta38yt.UOaSiulBEoL4t968g6RRPWHVMOUwInW' }
-    });
+    const binId = '69c4ae22c3097a1dd55f095e';
+    const res = await fetch('https://api.jsonbin.io/v3/b/' + binId + '/latest');
 
     if (res.ok) {
       const data = await res.json();
