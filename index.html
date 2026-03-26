@@ -116,6 +116,15 @@ body{min-height:100vh;}
     <div style="position:relative;height:200px;"><canvas id="chart"></canvas></div>
   </div>
 
+  <div class="section-head">
+    <span class="section-title">P&amp;L Breakdown</span>
+    <button class="btn btn-accent" onclick="openExpModal()" style="font-size:12px;">+ Edit Expenses</button>
+  </div>
+  <div class="two-col">
+    <div class="card"><div class="card-title">income</div><div id="income-rows"></div></div>
+    <div class="card"><div class="card-title">expenses</div><div id="expense-rows"></div></div>
+  </div>
+
   <div class="section-head"><span class="section-title">Early Warnings</span></div>
   <div id="alerts"></div>
 
@@ -205,6 +214,7 @@ function render(){
   renderFunnel('funnel-deals',[['Leads',D.leads,D.leads,'#4b5563'],['Called',D.connected,D.leads,'#60a5fa'],['Offer',D.offer,D.leads,'#a78bfa'],['Contracts',D.contracts,D.leads,'#f59e0b'],['Won',D.won,D.leads,'#4ade80']]);
   renderChart();
   renderAlerts(cr,hp,profit,margin);
+  renderPnL(revenue,exp);
 }
 
 function renderFunnel(id,steps){
@@ -235,7 +245,82 @@ function renderAlerts(cr,hp,profit,margin){
 }
 
 $('period-date').textContent=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
-refresh();
+
+const savedExp = localStorage.getItem('sc_exp');
+if(savedExp){ const s=JSON.parse(savedExp); EXPENSES.software=s.software||EXPENSES.software; EXPENSES.marketing=s.marketing||EXPENSES.marketing; EXPENSES.deal=s.deal||EXPENSES.deal; }
+
+function openExpModal(){
+  renderEL('software','sw-list');
+  renderEL('marketing','mk-list');
+  renderEL('deal','dl-list');
+  document.getElementById('exp-modal').style.display='flex';
+}
+
+function renderEL(type,lid){
+  document.getElementById(lid).innerHTML=EXPENSES[type].map((x,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <input type="text" value="${x.n}" onchange="EXPENSES['${type}'][${i}].n=this.value" placeholder="Name" style="flex:1;background:#1a1d1a;border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:7px 10px;color:#e8ede9;font-family:var(--font-mono);font-size:12px;outline:none;">
+      <input type="number" value="${x.a}" onchange="EXPENSES['${type}'][${i}].a=parseFloat(this.value)||0" style="width:90px;background:#1a1d1a;border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:7px 10px;color:#4ade80;font-family:var(--font-mono);font-size:12px;outline:none;text-align:right;">
+      <button onclick="EXPENSES['${type}'].splice(${i},1);renderEL('${type}','${lid}')" style="background:none;border:1px solid rgba(255,255,255,0.07);border-radius:6px;color:#6b736c;cursor:pointer;padding:6px 9px;">✕</button>
+    </div>`).join('');
+}
+
+function addExp(type){
+  const lid=type==='software'?'sw-list':type==='marketing'?'mk-list':'dl-list';
+  EXPENSES[type].push({n:'',a:0});
+  renderEL(type,lid);
+}
+
+function saveExp(){
+  localStorage.setItem('sc_exp',JSON.stringify(EXPENSES));
+  document.getElementById('exp-modal').style.display='none';
+  if(D) render();
+}
+
+function renderPnL(revenue, exp){
+  let inc='';
+  inc+=`<div class="pnl-row"><span class="pnl-label">Assignment fees</span><span class="pnl-val income">${fmt$(revenue)}</span></div>`;
+  inc+=`<div style="height:1px;background:rgba(255,255,255,0.12);margin:8px 0;"></div>`;
+  inc+=`<div class="pnl-row"><span class="pnl-label" style="color:var(--text);font-weight:600;">Total income</span><span class="pnl-val income" style="font-size:18px;font-weight:700;">${fmt$(revenue)}</span></div>`;
+  document.getElementById('income-rows').innerHTML=inc;
+
+  let rows='';
+  EXPENSES.software.forEach(x=>{ rows+=`<div class="pnl-row"><span class="pnl-label">${x.n}</span><span class="pnl-val expense">-${fmt$(x.a)}/mo</span></div>`; });
+  rows+=`<div class="pnl-row"><span class="pnl-label" style="color:var(--warn);">→ Software total</span><span class="pnl-val" style="color:var(--warn);">-${fmt$(exp.sw)}</span></div>`;
+  rows+=`<div style="height:1px;background:rgba(255,255,255,0.12);margin:8px 0;"></div>`;
+  EXPENSES.marketing.forEach(x=>{ rows+=`<div class="pnl-row"><span class="pnl-label">${x.n}</span><span class="pnl-val expense">-${fmt$(x.a)}</span></div>`; });
+  rows+=`<div class="pnl-row"><span class="pnl-label" style="color:var(--warn);">→ Marketing total</span><span class="pnl-val" style="color:var(--warn);">-${fmt$(exp.mk)}</span></div>`;
+  rows+=`<div style="height:1px;background:rgba(255,255,255,0.12);margin:8px 0;"></div>`;
+  rows+=`<div class="pnl-row"><span class="pnl-label">Deal costs (${D?D.won:0} deals)</span><span class="pnl-val expense">-${fmt$(exp.dl)}</span></div>`;
+  rows+=`<div style="height:1px;background:rgba(255,255,255,0.12);margin:8px 0;"></div>`;
+  rows+=`<div class="pnl-row"><span class="pnl-label" style="color:var(--text);font-weight:600;">Total expenses</span><span class="pnl-val expense" style="font-size:18px;font-weight:700;">-${fmt$(exp.total)}</span></div>`;
+  document.getElementById('expense-rows').innerHTML=rows;
+}
+
+setTimeout(refresh, 500);
 </script>
+
+<!-- EXPENSES MODAL -->
+<div id="exp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#141714;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:1.5rem;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+      <div style="font-size:16px;font-weight:700;">💸 Manage Expenses</div>
+      <button class="btn" style="background:transparent;color:#6b736c;border-color:rgba(255,255,255,0.07);" onclick="document.getElementById('exp-modal').style.display='none'">✕</button>
+    </div>
+    <div style="font-size:11px;color:#6b736c;font-family:var(--font-mono);margin-bottom:8px;">SOFTWARE SUBSCRIPTIONS (monthly)</div>
+    <div id="sw-list"></div>
+    <button class="btn" style="background:transparent;color:#6b736c;border-color:rgba(255,255,255,0.07);font-size:12px;margin-bottom:1.5rem;" onclick="addExp('software')">+ Add Software</button>
+    <div style="font-size:11px;color:#6b736c;font-family:var(--font-mono);margin-bottom:8px;">MARKETING &amp; AD SPEND</div>
+    <div id="mk-list"></div>
+    <button class="btn" style="background:transparent;color:#6b736c;border-color:rgba(255,255,255,0.07);font-size:12px;margin-bottom:1.5rem;" onclick="addExp('marketing')">+ Add Marketing</button>
+    <div style="font-size:11px;color:#6b736c;font-family:var(--font-mono);margin-bottom:8px;">PER-DEAL COSTS</div>
+    <div id="dl-list"></div>
+    <button class="btn" style="background:transparent;color:#6b736c;border-color:rgba(255,255,255,0.07);font-size:12px;margin-bottom:1.5rem;" onclick="addExp('deal')">+ Add Deal Cost</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-accent" onclick="saveExp()">Save All</button>
+      <button class="btn" style="background:transparent;color:#6b736c;border-color:rgba(255,255,255,0.07);" onclick="document.getElementById('exp-modal').style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
