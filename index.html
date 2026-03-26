@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seacoastal Home — Operations Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0d0f0e;
+    --surface: #141714;
+    --surface2: #1a1d1a;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8ede9;
+    --muted: #6b736c;
+    --accent: #4ade80;
+    --accent-dim: rgba(74,222,128,0.12);
+    --warn: #f59e0b;
+    --warn-dim: rgba(245,158,11,0.12);
+    --danger: #f87171;
+    --danger-dim: rgba(248,113,113,0.12);
+    --info: #60a5fa;
+    --info-dim: rgba(96,165,250,0.1);
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg); color: var(--text); font-family: var(--font-display); font-size: 14px; }
+  body { min-height: 100vh; }
+
+  /* LAYOUT */
+  .topbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,15,14,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+  }
+  .logo { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .logo span { color: var(--accent); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .last-sync { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .pill-status { font-size: 11px; font-family: var(--font-mono); padding: 3px 10px; border-radius: 20px; border: 1px solid; }
+  .pill-status.live { color: var(--accent); border-color: rgba(74,222,128,0.3); background: var(--accent-dim); }
+  .pill-status.stale { color: var(--warn); border-color: rgba(245,158,11,0.3); background: var(--warn-dim); }
+
+  .page { max-width: 1280px; margin: 0 auto; padding: 2rem; }
+
+  /* SECTION */
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin: 2rem 0 1rem; }
+  .section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+  /* KPI GRID */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi:hover { border-color: var(--border2); }
+  .kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; font-family: var(--font-mono); }
+  .kpi-val { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .kpi-val.good { color: var(--accent); }
+  .kpi-val.warn { color: var(--warn); }
+  .kpi-val.bad { color: var(--danger); }
+  .kpi-val.neutral { color: var(--text); }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 5px; font-family: var(--font-mono); }
+  .kpi-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); opacity: 0.4; transition: width 0.6s ease; }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; font-family: var(--font-mono); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+
+  /* FUNNEL */
+  .funnel-row { margin-bottom: 10px; }
+  .funnel-meta { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .funnel-meta .fname { color: var(--text); }
+  .funnel-meta .fcount { font-family: var(--font-mono); color: var(--muted); }
+  .funnel-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: 3px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+
+  /* P&L */
+  .pnl-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .pnl-row:last-child { border-bottom: none; }
+  .pnl-label { color: var(--muted); font-family: var(--font-mono); }
+  .pnl-val { font-family: var(--font-mono); font-weight: 500; }
+  .pnl-val.income { color: var(--accent); }
+  .pnl-val.expense { color: var(--danger); }
+  .pnl-val.profit { color: var(--accent); font-size: 18px; font-weight: 700; }
+  .pnl-val.loss { color: var(--danger); font-size: 18px; font-weight: 700; }
+  .pnl-divider { height: 1px; background: var(--border2); margin: 8px 0; }
+
+  /* EXPENSES EDITOR */
+  .exp-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .exp-item input[type=text] { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--text); font-family: var(--font-mono); font-size: 12px; outline: none; }
+  .exp-item input[type=text]:focus { border-color: var(--accent); }
+  .exp-item input[type=number] { width: 100px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--accent); font-family: var(--font-mono); font-size: 12px; outline: none; text-align: right; }
+  .exp-item input[type=number]:focus { border-color: var(--accent); }
+  .exp-item select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--muted); font-family: var(--font-mono); font-size: 11px; outline: none; }
+  .exp-item select:focus { border-color: var(--accent); }
+  .del-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; padding: 6px 9px; font-size: 13px; transition: all 0.15s; }
+  .del-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-family: var(--font-display); font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1px solid; }
+  .btn-accent { background: var(--accent-dim); color: var(--accent); border-color: rgba(74,222,128,0.3); }
+  .btn-accent:hover { background: rgba(74,222,128,0.2); }
+  .btn-ghost { background: transparent; color: var(--muted); border-color: var(--border); }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text); }
+  .btn-danger { background: var(--danger-dim); color: var(--danger); border-color: rgba(248,113,113,0.3); }
+
+  /* ALERTS */
+  .alert { display: flex; gap: 12px; padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid; font-size: 13px; }
+  .alert.high { background: var(--danger-dim); border-color: var(--danger); }
+  .alert.med { background: var(--warn-dim); border-color: var(--warn); }
+  .alert.ok { background: var(--accent-dim); border-color: var(--accent); }
+  .alert-badge { font-size: 10px; font-weight: 700; font-family: var(--font-mono); padding: 2px 7px; border-radius: 4px; align-self: flex-start; flex-shrink: 0; margin-top: 1px; }
+  .alert.high .alert-badge { background: var(--danger); color: #fff; }
+  .alert.med .alert-badge { background: var(--warn); color: #000; }
+  .alert.ok .alert-badge { background: var(--accent); color: #000; }
+  .alert-text { color: var(--text); line-height: 1.5; }
+  .alert-sub { color: var(--muted); font-size: 12px; margin-top: 2px; font-family: var(--font-mono); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; width: fit-content; }
+  .tab { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); transition: all 0.15s; border: none; background: none; font-family: var(--font-display); }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+
+  /* DEAL TABLE */
+  .deal-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .deal-table th { text-align: left; padding: 8px 10px; color: var(--muted); font-family: var(--font-mono); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 11px; }
+  .deal-table td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); }
+  .deal-table tr:last-child td { border-bottom: none; }
+  .deal-table tr:hover td { background: var(--surface2); }
+  .stage-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+
+  /* CONFIG PANEL */
+  .config-field { margin-bottom: 14px; }
+  .config-label { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 5px; }
+  .config-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: var(--font-mono); font-size: 12px; outline: none; }
+  .config-input:focus { border-color: var(--accent); }
+
+  /* CHART WRAPPER */
+  .chart-wrap { position: relative; }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 1.5rem; width: 90%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 1.5rem; }
+
+  /* SPIN */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinning { animation: spin 0.8s linear infinite; display: inline-block; }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .page { padding: 1rem; }
+    .two-col, .three-col { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">Seacoastal <span>Home</span> — Ops Dashboard</div>
+  <div class="topbar-right">
+    <span class="last-sync" id="last-sync-label">Last sync: never</span>
+    <span class="pill-status stale" id="sync-status">STALE</span>
+    <button class="btn btn-accent" id="refresh-btn" onclick="manualRefresh()">
+      <span id="refresh-icon">↻</span> Refresh Now
+    </button>
+    <button class="btn btn-ghost" onclick="openConfig()">⚙ Config</button>
+  </div>
+</div>
+
+<!-- PAGE -->
+<div class="page">
+
+  <!-- RANGE TABS -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:10px;">
+    <div>
+      <div style="font-size:22px; font-weight:700; letter-spacing:-0.02em;" id="period-label">This Month</div>
+      <div style="font-size:12px; color:var(--muted); font-family:var(--font-mono); margin-top:2px;" id="period-dates"></div>
+    </div>
+    <div class="tabs">
+      <button class="tab" onclick="setRange('7d',this)">7D</button>
+      <button class="tab active" onclick="setRange('30d',this)">30D</button>
+      <button class="tab" onclick="setRange('90d',this)">90D</button>
+      <button class="tab" onclick="setRange('mtd',this)">MTD</button>
+    </div>
+  </div>
+
+  <!-- P&L HERO -->
+  <div class="card" style="border-color: rgba(74,222,128,0.2); margin-bottom:10px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:1.5rem; align-items:center;">
+      <div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:4px;">GROSS REVENUE</div>
+        <div style="font-size:36px; font-weight:700; color:var(--accent); letter-spacing:-0.03em;" id="hero-revenue">$0</div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-top:3px;" id="hero-rev-sub">0 deals closed</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:4px;">TOTAL EXPENSES</div>
+        <div style="font-size:36px; font-weight:700; color:var(--danger); letter-spacing:-0.03em;" id="hero-expenses">$0</div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-top:3px;" id="hero-exp-sub">software + deals + marketing</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:4px;">NET PROFIT</div>
+        <div style="font-size:36px; font-weight:700; letter-spacing:-0.03em;" id="hero-profit">$0</div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-top:3px;" id="hero-margin">0% margin</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:4px;">COST PER DEAL</div>
+        <div style="font-size:36px; font-weight:700; color:var(--info); letter-spacing:-0.03em;" id="hero-cpd">$0</div>
+        <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-top:3px;">all-in cost to close one deal</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAPI KPIs -->
+  <div class="section-head">
+    <span class="section-title">Vapi — Jerry AI Calling</span>
+    <span style="font-size:11px; color:var(--muted); font-family:var(--font-mono);">auto-pulled nightly</span>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">calls dialed</div><div class="kpi-val neutral" id="k-dialed">—</div><div class="kpi-sub">total outbound</div><div class="kpi-bar" id="bar-dialed" style="width:100%"></div></div>
+    <div class="kpi"><div class="kpi-label">connected</div><div class="kpi-val" id="k-connected">—</div><div class="kpi-sub" id="ks-connected">— connect rate</div><div class="kpi-bar" id="bar-connected" style="width:0%"></div></div>
+    <div class="kpi"><div class="kpi-label">hung up &lt;10s</div><div class="kpi-val" id="k-hangup">—</div><div class="kpi-sub" id="ks-hangup">— of connected</div><div class="kpi-bar" id="bar-hangup" style="width:0%; background:var(--danger)"></div></div>
+    <div class="kpi"><div class="kpi-label">avg duration</div><div class="kpi-val neutral" id="k-duration">—</div><div class="kpi-sub">seconds per call</div></div>
+    <div class="kpi"><div class="kpi-label">voicemail drops</div><div class="kpi-val neutral" id="k-vm">—</div><div class="kpi-sub" id="ks-vm">— vm rate</div></div>
+    <div class="kpi"><div class="kpi-label">offer delivered</div><div class="kpi-val" id="k-offer">—</div><div class="kpi-sub" id="ks-offer">— of connected</div><div class="kpi-bar" id="bar-offer" style="width:0%; background:var(--accent)"></div></div>
+  </div>
+
+  <!-- GHL KPIs -->
+  <div class="section-head">
+    <span class="section-title">GHL — Pipeline</span>
+    <span style="font-size:11px; color:var(--muted); font-family:var(--font-mono);">auto-pulled nightly</span>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">leads imported</div><div class="kpi-val neutral" id="k-leads">—</div><div class="kpi-sub">BatchLeads</div></div>
+    <div class="kpi"><div class="kpi-label">tier 1 hot</div><div class="kpi-val" id="k-t1">—</div><div class="kpi-sub">score 8–9</div></div>
+    <div class="kpi"><div class="kpi-label">contracts submitted</div><div class="kpi-val warn" id="k-contracts">—</div><div class="kpi-sub">awaiting close</div></div>
+    <div class="kpi"><div class="kpi-label">closed &amp; won</div><div class="kpi-val" id="k-won">—</div><div class="kpi-sub" id="ks-won">this period</div></div>
+    <div class="kpi"><div class="kpi-label">leads per close</div><div class="kpi-val neutral" id="k-lpc">—</div><div class="kpi-sub">lower = better</div></div>
+    <div class="kpi"><div class="kpi-label">avg deal score</div><div class="kpi-val" id="k-score">—</div><div class="kpi-sub">Jerry AI rating</div></div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="two-col" style="margin-top:10px;">
+    <div class="card">
+      <div class="card-title">call funnel</div>
+      <div id="funnel-calls"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">deal pipeline</div>
+      <div id="funnel-deals"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <div class="card-title">weekly trend — calls · contracts · wins</div>
+    <div class="chart-wrap" style="height:200px;"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <!-- P&L BREAKDOWN -->
+  <div class="section-head" style="margin-top:2rem;">
+    <span class="section-title">P&amp;L Breakdown</span>
+    <button class="btn btn-ghost" onclick="openExpenses()" style="font-size:12px;">+ Edit Expenses</button>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">income</div>
+      <div id="income-rows"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">expenses</div>
+      <div id="expense-rows"></div>
+    </div>
+  </div>
+
+  <!-- DEAL TABLE -->
+  <div class="section-head" style="margin-top:2rem;">
+    <span class="section-title">Deal Log — Closed &amp; Won</span>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <table class="deal-table">
+      <thead>
+        <tr>
+          <th>Property</th><th>Agent</th><th>Close Date</th>
+          <th>Assign Fee</th><th>Deal Costs</th><th>Net</th><th>Stage</th>
+        </tr>
+      </thead>
+      <tbody id="deal-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ALERTS -->
+  <div class="section-head" style="margin-top:2rem;">
+    <span class="section-title">Early Warnings &amp; Recommendations</span>
+  </div>
+  <div id="alerts-wrap"></div>
+
+  <!-- N8N INSTRUCTIONS -->
+  <div class="section-head" style="margin-top:2rem;">
+    <span class="section-title">n8n Auto-Sync Setup</span>
+  </div>
+  <div class="card" style="font-family:var(--font-mono); font-size:12px; line-height:1.8; color:var(--muted);">
+    <div style="color:var(--text); font-size:13px; font-weight:600; margin-bottom:1rem;">How auto-sync works</div>
+    <div style="margin-bottom:12px;"><span style="color:var(--accent);">Step 1 —</span> In n8n, create a Schedule Trigger set to run at <strong style="color:var(--text);">11:59 PM daily</strong>.</div>
+    <div style="margin-bottom:12px;"><span style="color:var(--accent);">Step 2 —</span> Add an <strong style="color:var(--text);">HTTP Request node → Vapi API</strong><br>
+    GET <code style="color:var(--info);">https://api.vapi.ai/call?assistantId=a7fa7099-cd71-4760-94a8-e4060a731d30&limit=1000</code><br>
+    Header: <code style="color:var(--info);">Authorization: Bearer YOUR_VAPI_KEY</code></div>
+    <div style="margin-bottom:12px;"><span style="color:var(--accent);">Step 3 —</span> Add an <strong style="color:var(--text);">HTTP Request node → GHL API</strong><br>
+    GET <code style="color:var(--info);">https://services.leadconnectorhq.com/opportunities/search?location_id=0KudMlNZlDTEfkIM0398</code><br>
+    Header: <code style="color:var(--info);">Authorization: Bearer YOUR_GHL_KEY</code></div>
+    <div style="margin-bottom:12px;"><span style="color:var(--accent);">Step 4 —</span> Add a <strong style="color:var(--text);">Code node</strong> to aggregate: count calls, hang-ups, durations, stage counts.</div>
+    <div style="margin-bottom:12px;"><span style="color:var(--accent);">Step 5 —</span> Add an <strong style="color:var(--text);">HTTP Request node (POST)</strong> to your hosted dashboard URL:<br>
+    POST <code style="color:var(--info);">https://YOUR-DASHBOARD-URL/api/sync</code><br>
+    Body: the aggregated JSON object (format shown in Config panel → Data Format tab).</div>
+    <div><span style="color:var(--warn);">Note —</span> This dashboard also accepts a manual <strong style="color:var(--text);">Refresh Now</strong> push from n8n via the same endpoint. Keep your GHL + Vapi API keys in n8n credentials only — never paste them into this page.</div>
+  </div>
+
+</div>
+
+<!-- ===================== CONFIG MODAL ===================== -->
+<div class="modal-overlay" id="config-modal">
+  <div class="modal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+      <div class="modal-title">⚙ Configuration</div>
+      <button class="btn btn-ghost" onclick="closeModal('config-modal')">✕</button>
+    </div>
+    <div class="config-field">
+      <div class="config-label">n8n webhook URL (dashboard listens here for sync pushes)</div>
+      <input class="config-input" id="cfg-webhook" placeholder="https://your-n8n.com/webhook/dashboard-sync">
+    </div>
+    <div class="config-field">
+      <div class="config-label">Dashboard title</div>
+      <input class="config-input" id="cfg-title" value="Seacoastal Home">
+    </div>
+    <div class="config-field">
+      <div class="config-label">Vapi Assistant ID (read-only reference)</div>
+      <input class="config-input" value="a7fa7099-cd71-4760-94a8-e4060a731d30" readonly style="color:var(--muted);">
+    </div>
+    <div class="config-field">
+      <div class="config-label">GHL Location ID (read-only reference)</div>
+      <input class="config-input" value="0KudMlNZlDTEfkIM0398" readonly style="color:var(--muted);">
+    </div>
+    <div style="display:flex; gap:8px; margin-top:1rem;">
+      <button class="btn btn-accent" onclick="saveConfig()">Save</button>
+      <button class="btn btn-ghost" onclick="closeModal('config-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EXPENSES MODAL ===================== -->
+<div class="modal-overlay" id="exp-modal">
+  <div class="modal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+      <div class="modal-title">💸 Manage Expenses</div>
+      <button class="btn btn-ghost" onclick="closeModal('exp-modal')">✕</button>
+    </div>
+
+    <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:8px;">SOFTWARE SUBSCRIPTIONS (monthly)</div>
+    <div id="software-exp-list"></div>
+    <button class="btn btn-ghost" style="font-size:12px; margin-bottom:1.5rem;" onclick="addExpense('software')">+ Add Software</button>
+
+    <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:8px;">MARKETING &amp; AD SPEND (this period)</div>
+    <div id="marketing-exp-list"></div>
+    <button class="btn btn-ghost" style="font-size:12px; margin-bottom:1.5rem;" onclick="addExpense('marketing')">+ Add Marketing Cost</button>
+
+    <div style="font-size:11px; color:var(--muted); font-family:var(--font-mono); margin-bottom:8px;">PER-DEAL COSTS (applied to each closed deal)</div>
+    <div id="deal-exp-list"></div>
+    <button class="btn btn-ghost" style="font-size:12px; margin-bottom:1.5rem;" onclick="addExpense('deal')">+ Add Deal Cost</button>
+
+    <div style="display:flex; gap:8px; margin-top:0.5rem;">
+      <button class="btn btn-accent" onclick="saveExpenses()">Save All Expenses</button>
+      <button class="btn btn-ghost" onclick="closeModal('exp-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+const DEFAULT_EXPENSES = {
+  software: [
+    { name: 'GoHighLevel (GHL)', amount: 297 },
+    { name: 'Vapi (Jerry AI)', amount: 50 },
+    { name: 'BatchLeads', amount: 127 },
+    { name: 'n8n (self-hosted est.)', amount: 20 },
+    { name: 'RapidAPI', amount: 30 },
+    { name: 'Claude Pro', amount: 20 },
+  ],
+  marketing: [
+    { name: 'Skip trace / data', amount: 75 },
+    { name: 'SMS campaign (A2P)', amount: 40 },
+  ],
+  deal: [
+    { name: 'Title / closing fee', amount: 350 },
+    { name: 'Assignment fee (paid)', amount: 0 },
+    { name: 'Misc per-deal costs', amount: 100 },
+  ]
+};
+
+const DEFAULT_DATA = {
+  dialed: 500, connected: 180, hangup: 62, duration: 84,
+  vm: 118, offer: 41, leads: 800, tier1: 24,
+  contracts: 14, won: 3, score: 7.2,
+  deals: [
+    { address: '4821 Cypress Glen Dr, Houston', agent: 'Maria Lopez', date: '2025-03-12', fee: 9500, costs: 450 },
+    { address: '7103 Westfield Blvd, Houston', agent: 'James Carter', date: '2025-02-28', fee: 12000, costs: 450 },
+    { address: '3340 Pine Harbor Ln, Katy', agent: 'Tina Wu', date: '2025-02-14', fee: 8200, costs: 450 },
+  ],
+  weekly: {
+    labels: ['Mar 3','Mar 10','Mar 17','Mar 24'],
+    calls: [115, 128, 122, 135],
+    contracts: [3, 4, 3, 4],
+    wins: [0, 1, 1, 1]
+  }
+};
+
+let currentData = JSON.parse(localStorage.getItem('sc_data') || JSON.stringify(DEFAULT_DATA));
+let expenses = JSON.parse(localStorage.getItem('sc_expenses') || JSON.stringify(DEFAULT_EXPENSES));
+let currentRange = '30d';
+let trendChart = null;
+
+// ─── HELPERS ─────────────────────────────────────────────
+const fmt$ = n => '$' + Math.round(n).toLocaleString();
+const fmtPct = n => Math.round(n) + '%';
+const el = id => document.getElementById(id);
+
+function setKpi(id, val, cls, subId, subVal) {
+  const e = el(id);
+  e.textContent = val;
+  e.className = 'kpi-val ' + (cls || 'neutral');
+  if (subId && el(subId)) el(subId).textContent = subVal;
+}
+
+// ─── EXPENSES CALC ───────────────────────────────────────
+function calcExpenses(won) {
+  const sw = expenses.software.reduce((a,x) => a + parseFloat(x.amount||0), 0);
+  const mk = expenses.marketing.reduce((a,x) => a + parseFloat(x.amount||0), 0);
+  const dl = expenses.deal.reduce((a,x) => a + parseFloat(x.amount||0), 0) * won;
+  return { software: sw, marketing: mk, dealCosts: dl, total: sw + mk + dl };
+}
+
+// ─── RENDER ──────────────────────────────────────────────
+function render() {
+  const d = currentData;
+  const won = d.won || 0;
+  const revenue = d.deals ? d.deals.reduce((a,x) => a + x.fee, 0) : won * 10000;
+  const exp = calcExpenses(won);
+  const profit = revenue - exp.total;
+  const margin = revenue > 0 ? Math.round(profit/revenue*100) : 0;
+  const cpd = won > 0 ? Math.round(exp.total / won) : 0;
+
+  // Hero
+  el('hero-revenue').textContent = fmt$(revenue);
+  el('hero-rev-sub').textContent = won + ' deal' + (won!==1?'s':'') + ' closed';
+  el('hero-expenses').textContent = fmt$(exp.total);
+  el('hero-profit').textContent = fmt$(profit);
+  el('hero-profit').className = profit >= 0 ? 'kpi-val good' : 'kpi-val bad';
+  el('hero-profit').style.fontSize = '36px';
+  el('hero-margin').textContent = margin + '% margin';
+  el('hero-cpd').textContent = fmt$(cpd);
+
+  // Vapi
+  const cr = d.dialed > 0 ? d.connected/d.dialed*100 : 0;
+  const hp = d.connected > 0 ? d.hangup/d.connected*100 : 0;
+  const ofr = d.connected > 0 ? d.offer/d.connected*100 : 0;
+  const vmr = d.dialed > 0 ? d.vm/d.dialed*100 : 0;
+
+  setKpi('k-dialed', d.dialed.toLocaleString(), 'neutral');
+  setKpi('k-connected', d.connected.toLocaleString(), cr>=35?'good':cr>=20?'warn':'bad', 'ks-connected', fmtPct(cr)+' connect rate');
+  setKpi('k-hangup', d.hangup.toLocaleString(), hp>=40?'bad':hp>=25?'warn':'good', 'ks-hangup', fmtPct(hp)+' of connected');
+  setKpi('k-duration', d.duration+'s', d.duration>=90?'good':d.duration>=60?'warn':'bad');
+  setKpi('k-vm', d.vm.toLocaleString(), 'neutral', 'ks-vm', fmtPct(vmr)+' vm rate');
+  setKpi('k-offer', d.offer.toLocaleString(), ofr>=30?'good':ofr>=15?'warn':'bad', 'ks-offer', fmtPct(ofr)+' of connected');
+
+  el('bar-connected').style.width = fmtPct(cr);
+  el('bar-hangup').style.width = fmtPct(hp);
+  el('bar-offer').style.width = fmtPct(ofr);
+
+  // GHL
+  const lpc = won > 0 ? Math.round(d.leads/won) : '—';
+  setKpi('k-leads', d.leads.toLocaleString(), 'neutral');
+  setKpi('k-t1', (d.tier1||0).toLocaleString(), 'good');
+  setKpi('k-contracts', d.contracts.toLocaleString(), 'warn');
+  setKpi('k-won', won.toLocaleString(), won>0?'good':'bad', 'ks-won', 'this period');
+  setKpi('k-lpc', lpc, 'neutral');
+  setKpi('k-score', parseFloat(d.score).toFixed(1), d.score>=8?'good':d.score>=6?'warn':'bad');
+
+  renderFunnels(d, cr, hp, ofr);
+  renderTrend(d);
+  renderPnL(revenue, exp);
+  renderDeals(d.deals || [], exp.deal / (won||1));
+  renderAlerts(d, cr, hp, ofr, profit, margin);
+
+  el('period-dates').textContent = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
+}
+
+function renderFunnels(d, cr, hp, ofr) {
+  const callSteps = [
+    ['Dialed', d.dialed, d.dialed, '#4b5563'],
+    ['Connected', d.connected, d.dialed, '#60a5fa'],
+    ['Stayed >10s', d.connected - d.hangup, d.dialed, '#a78bfa'],
+    ['Offer delivered', d.offer, d.dialed, '#4ade80'],
+  ];
+  const dealSteps = [
+    ['Leads in', d.leads, d.leads, '#4b5563'],
+    ['Called', d.connected, d.leads, '#60a5fa'],
+    ['Offer delivered', d.offer, d.leads, '#a78bfa'],
+    ['Contracts', d.contracts, d.leads, '#f59e0b'],
+    ['Won', d.won, d.leads, '#4ade80'],
+  ];
+  el('funnel-calls').innerHTML = callSteps.map(([l,v,max,c]) => funRow(l,v,max,c)).join('');
+  el('funnel-deals').innerHTML = dealSteps.map(([l,v,max,c]) => funRow(l,v,max,c)).join('');
+}
+
+function funRow(label, val, max, color) {
+  const pct = max > 0 ? Math.min(100, Math.round(val/max*100)) : 0;
+  return `<div class="funnel-row">
+    <div class="funnel-meta"><span class="fname">${label}</span><span class="fcount">${(val||0).toLocaleString()} (${pct}%)</span></div>
+    <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%;background:${color};"></div></div>
+  </div>`;
+}
+
+function renderTrend(d) {
+  const ctx = el('trendChart');
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  const w = d.weekly || DEFAULT_DATA.weekly;
+  trendChart = new Chart(ctx, {
+    data: {
+      labels: w.labels,
+      datasets: [
+        { type:'bar', label:'Calls connected', data: w.calls, backgroundColor:'rgba(96,165,250,0.3)', borderColor:'#60a5fa', borderWidth:1, yAxisID:'y' },
+        { type:'line', label:'Contracts', data: w.contracts, borderColor:'#f59e0b', backgroundColor:'transparent', tension:0.35, pointRadius:4, pointBackgroundColor:'#f59e0b', yAxisID:'y2' },
+        { type:'line', label:'Wins', data: w.wins, borderColor:'#4ade80', backgroundColor:'transparent', tension:0.35, pointRadius:5, pointBackgroundColor:'#4ade80', yAxisID:'y2' }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        y:{ position:'left', grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#6b736c', font:{size:11} } },
+        y2:{ position:'right', grid:{ display:false }, ticks:{ color:'#6b736c', font:{size:11} } }
+      }
+    }
+  });
+}
+
+function renderPnL(revenue, exp) {
+  el('income-rows').innerHTML = `
+    <div class="pnl-row"><span class="pnl-label">Assignment fees</span><span class="pnl-val income">${fmt$(revenue)}</span></div>
+    <div class="pnl-divider"></div>
+    <div class="pnl-row"><span class="pnl-label" style="color:var(--text);font-weight:600;">Total income</span><span class="pnl-val income" style="font-size:18px;font-weight:700;">${fmt$(revenue)}</span></div>
+  `;
+
+  let rows = '';
+  expenses.software.forEach(x => {
+    rows += `<div class="pnl-row"><span class="pnl-label">${x.name}</span><span class="pnl-val expense">-${fmt$(x.amount)}/mo</span></div>`;
+  });
+  rows += `<div class="pnl-row"><span class="pnl-label" style="color:var(--warn);">→ Software total</span><span class="pnl-val" style="color:var(--warn);">-${fmt$(exp.software)}</span></div>`;
+  rows += `<div class="pnl-divider"></div>`;
+  expenses.marketing.forEach(x => {
+    rows += `<div class="pnl-row"><span class="pnl-label">${x.name}</span><span class="pnl-val expense">-${fmt$(x.amount)}</span></div>`;
+  });
+  rows += `<div class="pnl-row"><span class="pnl-label" style="color:var(--warn);">→ Marketing total</span><span class="pnl-val" style="color:var(--warn);">-${fmt$(exp.marketing)}</span></div>`;
+  rows += `<div class="pnl-divider"></div>`;
+  rows += `<div class="pnl-row"><span class="pnl-label">Deal costs (${currentData.won||0} deals × est.)</span><span class="pnl-val expense">-${fmt$(exp.dealCosts)}</span></div>`;
+  rows += `<div class="pnl-divider"></div>`;
+  rows += `<div class="pnl-row"><span class="pnl-label" style="color:var(--text);font-weight:600;">Total expenses</span><span class="pnl-val expense" style="font-size:18px;font-weight:700;">-${fmt$(exp.total)}</span></div>`;
+
+  el('expense-rows').innerHTML = rows;
+}
+
+function renderDeals(deals, costPer) {
+  if (!deals.length) {
+    el('deal-tbody').innerHTML = '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:1.5rem;">No deals logged yet — data will populate after first sync or manual entry.</td></tr>';
+    return;
+  }
+  el('deal-tbody').innerHTML = deals.map(deal => {
+    const net = deal.fee - (deal.costs || costPer);
+    return `<tr>
+      <td>${deal.address}</td>
+      <td>${deal.agent}</td>
+      <td>${deal.date}</td>
+      <td style="color:var(--accent);">${fmt$(deal.fee)}</td>
+      <td style="color:var(--danger);">-${fmt$(deal.costs||costPer)}</td>
+      <td style="color:${net>=0?'var(--accent)':'var(--danger)'}; font-weight:600;">${fmt$(net)}</td>
+      <td><span class="stage-badge" style="background:rgba(74,222,128,0.15);color:var(--accent);">WON</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlerts(d, cr, hp, ofr, profit, margin) {
+  const alerts = [];
+  if (hp >= 35) alerts.push({ lvl:'high', text:'High early hang-up rate ('+Math.round(hp)+'%)', sub:'Jerry sounds robotic. Slow down opener pace in Vapi prompt. Test a warmer first 5 words.' });
+  if (cr < 20) alerts.push({ lvl:'high', text:'Low connect rate ('+Math.round(cr)+'%)', sub:'Check spam status on +19382041950 at freecallerregistry.com. Try calling 9–11am Houston time.' });
+  if (d.offer > 0 && d.contracts/d.offer < 0.15) alerts.push({ lvl:'med', text:'Low offer → contract rate ('+Math.round(d.contracts/d.offer*100)+'%)', sub:'Jerry may be rushing the MAO. Add rapport checkpoint before price delivery in the script.' });
+  if (d.duration < 60) alerts.push({ lvl:'med', text:'Short avg call duration ('+d.duration+'s)', sub:'Agents not engaged past greeting. Revisit the hook — lead with property address not company name.' });
+  if (profit < 0) alerts.push({ lvl:'high', text:'Operating at a loss ('+fmt$(profit)+')', sub:'Revenue does not cover expenses this period. Need at least '+Math.ceil(calcExpenses(0).total/8500)+' more deals to break even.' });
+  if (margin > 0 && margin < 30) alerts.push({ lvl:'med', text:'Low profit margin ('+margin+'%)', sub:'Target 40%+ margin. Review per-deal costs and negotiate lower title fees.' });
+  if (d.score < 6 && d.contracts > 0) alerts.push({ lvl:'med', text:'Low avg deal score ('+parseFloat(d.score).toFixed(1)+')', sub:'Tier 3 leads dominating. Tighten BatchLeads filter to equity-rich, 5+ year holds only.' });
+  if (!alerts.length) alerts.push({ lvl:'ok', text:'All systems healthy', sub:'No critical flags this period. Keep monitoring hang-up rate and profit margin weekly.' });
+
+  el('alerts-wrap').innerHTML = alerts.map(a => `
+    <div class="alert ${a.lvl}">
+      <span class="alert-badge">${a.lvl.toUpperCase()}</span>
+      <div><div class="alert-text">${a.text}</div><div class="alert-sub">${a.sub}</div></div>
+    </div>
+  `).join('');
+}
+
+// ─── EXPENSES MODAL ──────────────────────────────────────
+function openExpenses() {
+  renderExpEditor('software', 'software-exp-list');
+  renderExpEditor('marketing', 'marketing-exp-list');
+  renderExpEditor('deal', 'deal-exp-list');
+  el('exp-modal').classList.add('open');
+}
+
+function renderExpEditor(type, listId) {
+  el(listId).innerHTML = expenses[type].map((x,i) => `
+    <div class="exp-item">
+      <input type="text" value="${x.name}" onchange="expenses['${type}'][${i}].name=this.value" placeholder="Expense name">
+      <input type="number" value="${x.amount}" min="0" step="0.01" onchange="expenses['${type}'][${i}].amount=parseFloat(this.value)||0" placeholder="0.00">
+      <button class="del-btn" onclick="removeExpense('${type}',${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function addExpense(type) {
+  expenses[type].push({ name: '', amount: 0 });
+  renderExpEditor(type, type+'-exp-list');
+  if (type==='marketing') renderExpEditor(type,'marketing-exp-list');
+  if (type==='deal') renderExpEditor(type,'deal-exp-list');
+  if (type==='software') renderExpEditor(type,'software-exp-list');
+}
+
+function removeExpense(type, idx) {
+  expenses[type].splice(idx, 1);
+  renderExpEditor(type, type === 'software' ? 'software-exp-list' : type === 'marketing' ? 'marketing-exp-list' : 'deal-exp-list');
+}
+
+function saveExpenses() {
+  localStorage.setItem('sc_expenses', JSON.stringify(expenses));
+  closeModal('exp-modal');
+  render();
+}
+
+// ─── CONFIG MODAL ────────────────────────────────────────
+function openConfig() { el('config-modal').classList.add('open'); }
+function saveConfig() {
+  localStorage.setItem('sc_cfg_webhook', el('cfg-webhook').value);
+  closeModal('config-modal');
+}
+function closeModal(id) { el(id).classList.remove('open'); }
+
+// ─── RANGE ───────────────────────────────────────────────
+function setRange(range, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  currentRange = range;
+  const labels = { '7d':'Last 7 Days', '30d':'Last 30 Days', '90d':'Last 90 Days', 'mtd':'Month to Date' };
+  el('period-label').textContent = labels[range];
+  render();
+}
+
+// ─── REFRESH ─────────────────────────────────────────────
+async function manualRefresh() {
+  const btn = el('refresh-btn');
+  const icon = el('refresh-icon');
+  btn.disabled = true;
+  icon.className = 'spinning';
+  icon.textContent = '↻';
+
+  try {
+    // Try n8n webhook if configured
+    const webhook = localStorage.getItem('sc_cfg_webhook');
+    if (webhook) {
+      const res = await fetch(webhook, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'pull', range: currentRange }) });
+      if (res.ok) {
+        const fresh = await res.json();
+        if (fresh && fresh.dialed !== undefined) {
+          currentData = fresh;
+          localStorage.setItem('sc_data', JSON.stringify(currentData));
+        }
+      }
+    }
+    // Accept pushed data via URL hash (n8n can redirect with data)
+    syncStatus('live');
+  } catch(e) {
+    console.warn('Refresh failed, using cached data', e);
+  }
+
+  render();
+  btn.disabled = false;
+  icon.className = '';
+  icon.textContent = '↻';
+}
+
+// Accept POST data from n8n via BroadcastChannel (same-origin)
+const bc = new BroadcastChannel('sc_sync');
+bc.onmessage = (e) => {
+  if (e.data && e.data.dialed !== undefined) {
+    currentData = e.data;
+    localStorage.setItem('sc_data', JSON.stringify(currentData));
+    syncStatus('live');
+    render();
+  }
+};
+
+function syncStatus(s) {
+  const now = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  el('last-sync-label').textContent = 'Last sync: ' + now;
+  el('sync-status').textContent = s === 'live' ? 'LIVE' : 'STALE';
+  el('sync-status').className = 'pill-status ' + s;
+  localStorage.setItem('sc_last_sync', now);
+}
+
+// ─── INIT ────────────────────────────────────────────────
+const savedSync = localStorage.getItem('sc_last_sync');
+if (savedSync) { el('last-sync-label').textContent = 'Last sync: ' + savedSync; el('sync-status').textContent = 'STALE'; }
+render();
+</script>
+</body>
+</html>
